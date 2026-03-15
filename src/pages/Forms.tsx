@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api, type Form } from '../lib/api';
-import { Plus, FileText, Loader2, Copy, Check, MoreVertical, Trash2, Settings } from 'lucide-react';
+import { api, type Form, type UsageData } from '../lib/api';
+import { Plus, FileText, Loader2, Copy, Check, MoreVertical, Trash2, Settings, Zap } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'https://contactformapi.contactformapi.workers.dev';
 
 export default function Forms() {
   const [forms, setForms] = useState<Form[]>([]);
+  const [usage, setUsage] = useState<UsageData | null>(null);
   const [loading, setLoading] = useState(true);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
@@ -14,7 +15,13 @@ export default function Forms() {
 
   const load = () => {
     setLoading(true);
-    api.forms.list(1, 100).then(({ data }) => setForms(data)).finally(() => setLoading(false));
+    Promise.all([
+      api.forms.list(1, 100),
+      api.usage(),
+    ]).then(([formsRes, usageData]) => {
+      setForms(formsRes.data);
+      setUsage(usageData);
+    }).finally(() => setLoading(false));
   };
 
   useEffect(() => { load(); }, []);
@@ -50,14 +57,26 @@ export default function Forms() {
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Forms</h1>
-          <p className="text-gray-500 mt-1">Manage your form endpoints</p>
+          <p className="text-gray-500 mt-1">
+            Manage your form endpoints
+            {usage && <span className="ml-2 text-gray-400">({usage.usage.forms}/{usage.usage.forms_limit === -1 ? '∞' : usage.usage.forms_limit} used)</span>}
+          </p>
         </div>
-        <Link
-          to="/forms/new"
-          className="inline-flex items-center gap-2 bg-primary-600 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-primary-700 transition"
-        >
-          <Plus className="h-4 w-4" /> New Form
-        </Link>
+        {usage && usage.usage.forms_remaining !== 0 ? (
+          <Link
+            to="/forms/new"
+            className="inline-flex items-center gap-2 bg-primary-600 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-primary-700 transition"
+          >
+            <Plus className="h-4 w-4" /> New Form
+          </Link>
+        ) : (
+          <Link
+            to="/billing"
+            className="inline-flex items-center gap-2 bg-amber-500 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-amber-600 transition"
+          >
+            <Zap className="h-4 w-4" /> Upgrade to add more
+          </Link>
+        )}
       </div>
 
       {forms.length === 0 ? (

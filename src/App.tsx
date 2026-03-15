@@ -10,6 +10,7 @@ import Forms from './pages/Forms';
 import FormCreate from './pages/FormCreate';
 import FormDetail from './pages/FormDetail';
 import FormSettings from './pages/FormSettings';
+import Billing from './pages/Billing';
 import SettingsPage from './pages/SettingsPage';
 
 export default function App() {
@@ -27,6 +28,7 @@ export default function App() {
             <Route path="/forms/new" element={<FormCreate />} />
             <Route path="/forms/:formId" element={<FormDetail />} />
             <Route path="/forms/:formId/settings" element={<FormSettings />} />
+            <Route path="/billing" element={<Billing />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Route>
         </Routes>

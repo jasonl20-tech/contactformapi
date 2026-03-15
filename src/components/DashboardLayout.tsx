@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import {
   LayoutDashboard,
   FileText,
+  CreditCard,
   Settings,
   LogOut,
   Menu,
@@ -15,6 +16,7 @@ import {
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/forms', icon: FileText, label: 'Forms' },
+  { to: '/billing', icon: CreditCard, label: 'Billing' },
   { to: '/settings', icon: Settings, label: 'Settings' },
 ];
 

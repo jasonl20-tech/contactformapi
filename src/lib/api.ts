@@ -61,7 +61,46 @@ export interface Pagination {
   total_pages: number;
 }
 
+export interface PlanConfig {
+  id: string;
+  name: string;
+  forms_limit: number;
+  forms_limit_display: string | number;
+  submissions_limit: number;
+  webhooks: boolean;
+  custom_redirects: boolean;
+  recaptcha: boolean;
+  origin_whitelist: boolean;
+  email_notifications: boolean;
+  webhook_logs: boolean;
+  api_access: boolean;
+}
+
+export interface UsageData {
+  user: {
+    id: string;
+    email: string | null;
+    plan: string;
+    polar_customer_id: string | null;
+    polar_subscription_id: string | null;
+    created_at: string;
+  };
+  plan: PlanConfig;
+  usage: {
+    forms: number;
+    forms_limit: number;
+    forms_remaining: number;
+    submissions_this_month: number;
+    submissions_limit: number;
+    submissions_remaining: number;
+    submissions_percentage: number;
+  };
+  all_plans: PlanConfig[];
+}
+
 export const api = {
+  usage: () => request<UsageData>('/api/usage'),
+
   forms: {
     list: (page = 1, limit = 20) =>
       request<{ data: Form[]; pagination: Pagination }>(`/api/forms?page=${page}&limit=${limit}`),
