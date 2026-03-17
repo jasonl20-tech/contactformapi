@@ -1,20 +1,18 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { api } from '../lib/api';
+import { useWorkspace } from '../contexts/WorkspaceContext';
 import { Loader2, ArrowLeft } from 'lucide-react';
-import { Link } from 'react-router-dom';
 
 export default function FormCreate() {
   const navigate = useNavigate();
+  const { account, isPersonal } = useWorkspace();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [formData, setFormData] = useState({
     name: '',
-    email_to: '',
-    redirect_url: '',
-    webhook_url: '',
-    allowed_origins: '',
-    honeypot_enabled: true,
+    redirectUrl: '',
+    emailNotifications: true,
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -22,15 +20,13 @@ export default function FormCreate() {
     setError('');
     setLoading(true);
     try {
-      const { data } = await api.forms.create({
+      const result = await api.forms.create({
         name: formData.name || 'Untitled Form',
-        email_to: formData.email_to || null,
-        redirect_url: formData.redirect_url || null,
-        webhook_url: formData.webhook_url || null,
-        allowed_origins: formData.allowed_origins || null,
-        honeypot_enabled: formData.honeypot_enabled ? 1 : 0,
+        teamId: isPersonal ? null : account,
+        redirectUrl: formData.redirectUrl || null,
+        emailNotifications: formData.emailNotifications,
       });
-      navigate(`/forms/${data.id}`);
+      navigate(`/forms/${result.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create form');
     } finally {
@@ -65,65 +61,37 @@ export default function FormCreate() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Notification Email</label>
-            <input
-              type="email"
-              value={formData.email_to}
-              onChange={(e) => setFormData({ ...formData, email_to: e.target.value })}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition"
-              placeholder="notifications@example.com"
-            />
-            <p className="text-xs text-gray-400 mt-1">Receive an email for each submission</p>
-          </div>
-
-          <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Redirect URL</label>
             <input
               type="url"
-              value={formData.redirect_url}
-              onChange={(e) => setFormData({ ...formData, redirect_url: e.target.value })}
+              value={formData.redirectUrl}
+              onChange={(e) => setFormData({ ...formData, redirectUrl: e.target.value })}
               className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition"
               placeholder="https://yoursite.com/thank-you"
             />
             <p className="text-xs text-gray-400 mt-1">Where to redirect after submission (HTML forms only)</p>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Webhook URL</label>
-            <input
-              type="url"
-              value={formData.webhook_url}
-              onChange={(e) => setFormData({ ...formData, webhook_url: e.target.value })}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition"
-              placeholder="https://yourapi.com/webhook"
-            />
-            <p className="text-xs text-gray-400 mt-1">Receive a POST request for each submission</p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Allowed Origins</label>
-            <input
-              type="text"
-              value={formData.allowed_origins}
-              onChange={(e) => setFormData({ ...formData, allowed_origins: e.target.value })}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition"
-              placeholder="https://yoursite.com, https://other.com"
-            />
-            <p className="text-xs text-gray-400 mt-1">Comma-separated list of allowed origins. Leave empty to allow all.</p>
-          </div>
-
           <div className="flex items-center gap-3">
             <input
               type="checkbox"
-              id="honeypot"
-              checked={formData.honeypot_enabled}
-              onChange={(e) => setFormData({ ...formData, honeypot_enabled: e.target.checked })}
+              id="emailNotifications"
+              checked={formData.emailNotifications}
+              onChange={(e) => setFormData({ ...formData, emailNotifications: e.target.checked })}
               className="h-4 w-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
             />
-            <label htmlFor="honeypot" className="text-sm font-medium text-gray-700">
-              Enable honeypot spam protection
+            <label htmlFor="emailNotifications" className="text-sm font-medium text-gray-700">
+              Enable email notifications
             </label>
           </div>
+
+          {!isPersonal && (
+            <div className="p-3 bg-primary-50 border border-primary-200 rounded-lg">
+              <p className="text-sm text-primary-700">
+                This form will be created in the current workspace. All workspace members will have access based on their role.
+              </p>
+            </div>
+          )}
 
           <div className="flex gap-3 pt-4">
             <button

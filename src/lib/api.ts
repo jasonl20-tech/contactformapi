@@ -1,14 +1,21 @@
 const API_BASE = import.meta.env.VITE_API_URL || 'https://contactformapi.contactformapi.workers.dev';
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = localStorage.getItem('user_id');
+function getHeaders(): Record<string, string> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
+  };
+  const userId = localStorage.getItem('user_id');
+  if (userId) headers['X-User-Id'] = userId;
+  const workspaceId = localStorage.getItem('workspace_id');
+  if (workspaceId) headers['X-Workspace-Id'] = workspaceId;
+  return headers;
+}
+
+async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const headers = {
+    ...getHeaders(),
     ...(options.headers as Record<string, string> || {}),
   };
-  if (token) {
-    headers['X-User-Id'] = token;
-  }
 
   const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
 
@@ -20,45 +27,61 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+// --- Types ---
+
+export interface Workspace {
+  teamId: string;
+  teamName: string;
+  role: string;
+  ownerId: string;
+  plan?: string;
+}
+
+export interface WorkspaceMember {
+  memberId: string;
+  userId: string;
+  role: string;
+  joinedAt: string | null;
+  userName: string;
+  userEmail: string;
+  userImage: string | null;
+}
+
+export interface WorkspaceInvite {
+  id: string;
+  teamId: string;
+  email: string;
+  role: string;
+  invitedBy: string;
+  createdAt: string | null;
+}
+
 export interface Form {
   id: string;
-  user_id: string;
   name: string;
-  email_to: string | null;
-  email_subject: string | null;
-  email_from_name: string | null;
-  redirect_url: string | null;
-  error_redirect_url: string | null;
-  append_params: number;
-  honeypot_enabled: number;
-  recaptcha_enabled: number;
-  recaptcha_secret: string | null;
-  allowed_origins: string | null;
-  webhook_url: string | null;
-  webhook_secret: string | null;
-  is_active: number;
-  submission_count: number;
-  created_at: string;
-  updated_at: string;
+  teamId: string | null;
+  userId: string;
+  redirectUrl: string | null;
+  emailNotifications: number;
+  submissionCount: number;
+  createdAt: string | null;
+  canWrite?: boolean;
 }
 
 export interface Submission {
-  id: string;
-  form_id: string;
+  id: number;
+  submissionNumber: number | null;
   data: Record<string, unknown>;
-  ip_address: string;
-  user_agent: string;
-  origin: string;
-  is_spam: number;
-  is_read: number;
-  created_at: string;
+  isSpam: number;
+  createdAt: string | null;
 }
 
-export interface Pagination {
+export interface SubmissionsResponse {
+  items: Submission[];
+  total: number;
   page: number;
   limit: number;
-  total: number;
-  total_pages: number;
+  totalPages: number;
 }
 
 export interface PlanConfig {
@@ -76,58 +99,119 @@ export interface PlanConfig {
   api_access: boolean;
 }
 
-export interface UsageData {
-  user: {
-    id: string;
-    email: string | null;
-    plan: string;
-    polar_customer_id: string | null;
-    polar_subscription_id: string | null;
-    created_at: string;
-  };
-  plan: PlanConfig;
-  usage: {
-    forms: number;
-    forms_limit: number;
-    forms_remaining: number;
-    submissions_this_month: number;
-    submissions_limit: number;
-    submissions_remaining: number;
-    submissions_percentage: number;
-  };
-  all_plans: PlanConfig[];
+export interface SubscriptionData {
+  id: string;
+  plan: string;
+  status: string;
+  stripePriceId: string;
+  currentPeriodStart: string | null;
+  currentPeriodEnd: string | null;
+  cancelAtPeriodEnd: number;
 }
 
-export const api = {
-  usage: () => request<UsageData>('/api/usage'),
+export type WorkspaceRole = 'owner' | 'admin' | 'editor' | 'viewer';
 
+export const ROLE_PERMISSIONS: Record<WorkspaceRole, {
+  manageForms: boolean;
+  readSubmissions: boolean;
+  changeSettings: boolean;
+  inviteMembers: boolean;
+  manageBilling: boolean;
+  deleteWorkspace: boolean;
+}> = {
+  owner: { manageForms: true, readSubmissions: true, changeSettings: true, inviteMembers: true, manageBilling: true, deleteWorkspace: true },
+  admin: { manageForms: true, readSubmissions: true, changeSettings: true, inviteMembers: true, manageBilling: false, deleteWorkspace: false },
+  editor: { manageForms: true, readSubmissions: true, changeSettings: false, inviteMembers: false, manageBilling: false, deleteWorkspace: false },
+  viewer: { manageForms: false, readSubmissions: true, changeSettings: false, inviteMembers: false, manageBilling: false, deleteWorkspace: false },
+};
+
+// --- API ---
+
+export const api = {
+  // Workspaces
+  workspaces: {
+    list: () => request<Workspace[]>('/api/teams'),
+
+    create: (name: string) =>
+      request<{ id: string; name: string; role: string }>('/api/teams', {
+        method: 'POST',
+        body: JSON.stringify({ name }),
+      }),
+  },
+
+  // Members
+  members: {
+    list: (workspaceId: string) =>
+      request<WorkspaceMember[]>(`/api/teams/${workspaceId}/members`),
+
+    remove: (workspaceId: string, userId: string) =>
+      request<{ success: boolean }>(`/api/teams/${workspaceId}/members`, {
+        method: 'DELETE',
+        body: JSON.stringify({ userId }),
+      }),
+  },
+
+  // Invites
+  invites: {
+    list: (workspaceId: string) =>
+      request<WorkspaceInvite[]>(`/api/teams/${workspaceId}/invite`),
+
+    send: (workspaceId: string, email: string, role: string) =>
+      request<{ success: boolean; message: string; inviteId?: string; directAdd?: boolean }>(
+        `/api/teams/${workspaceId}/invite`,
+        { method: 'POST', body: JSON.stringify({ email, role }) },
+      ),
+
+    revoke: (workspaceId: string, inviteId: string) =>
+      request<{ success: boolean }>(`/api/teams/${workspaceId}/invite`, {
+        method: 'DELETE',
+        body: JSON.stringify({ inviteId }),
+      }),
+  },
+
+  // Forms
   forms: {
-    list: (page = 1, limit = 20) =>
-      request<{ data: Form[]; pagination: Pagination }>(`/api/forms?page=${page}&limit=${limit}`),
+    list: (account: string = 'personal') =>
+      request<Form[]>(`/api/forms?account=${encodeURIComponent(account)}`),
 
     get: (id: string) =>
-      request<{ data: Form }>(`/api/forms/${id}`),
+      request<Form & { canWrite: boolean }>(`/api/forms/${id}`),
 
-    create: (data: Partial<Form>) =>
-      request<{ data: Form }>('/api/forms', { method: 'POST', body: JSON.stringify(data) }),
+    create: (data: { name: string; teamId?: string | null; redirectUrl?: string | null; emailNotifications?: boolean }) =>
+      request<{ id: string; name: string; teamId: string | null }>('/api/forms', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
 
-    update: (id: string, data: Partial<Form>) =>
-      request<{ data: Form }>(`/api/forms/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    update: (id: string, data: Partial<{ name: string; redirectUrl: string | null; emailNotifications: boolean }>) =>
+      request<{ success: boolean }>(`/api/forms/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }),
 
     delete: (id: string) =>
       request<{ success: boolean }>(`/api/forms/${id}`, { method: 'DELETE' }),
   },
 
+  // Submissions
   submissions: {
-    list: (formId: string, page = 1, limit = 20) =>
-      request<{ data: Submission[]; pagination: Pagination }>(
-        `/api/forms/${formId}/submissions?page=${page}&limit=${limit}`
+    list: (formId: string, page = 1, limit = 25) =>
+      request<SubmissionsResponse>(
+        `/api/forms/${formId}/submissions?page=${page}&limit=${limit}`,
       ),
+  },
 
-    get: (formId: string, id: string) =>
-      request<{ data: Submission }>(`/api/forms/${formId}/submissions/${id}`),
+  // Stripe Billing
+  billing: {
+    checkout: (plan: string, interval: 'month' | 'year' = 'month') =>
+      request<{ url: string }>('/api/stripe/checkout', {
+        method: 'POST',
+        body: JSON.stringify({ plan, interval }),
+      }),
 
-    delete: (formId: string, id: string) =>
-      request<{ success: boolean }>(`/api/forms/${formId}/submissions/${id}`, { method: 'DELETE' }),
+    portal: () =>
+      request<{ url: string }>('/api/stripe/portal', { method: 'POST' }),
   },
 };
+
+export { API_BASE };

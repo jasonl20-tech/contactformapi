@@ -6,7 +6,7 @@ import { Loader2, ArrowLeft, Save, Trash2 } from 'lucide-react';
 export default function FormSettings() {
   const { formId } = useParams<{ formId: string }>();
   const navigate = useNavigate();
-  const [form, setForm] = useState<Form | null>(null);
+  const [form, setForm] = useState<(Form & { canWrite: boolean }) | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -14,40 +14,18 @@ export default function FormSettings() {
 
   const [formData, setFormData] = useState({
     name: '',
-    email_to: '',
-    email_subject: '',
-    email_from_name: '',
-    redirect_url: '',
-    error_redirect_url: '',
-    allowed_origins: '',
-    webhook_url: '',
-    webhook_secret: '',
-    honeypot_enabled: true,
-    recaptcha_enabled: false,
-    recaptcha_secret: '',
-    is_active: true,
-    append_params: true,
+    redirectUrl: '',
+    emailNotifications: true,
   });
 
   useEffect(() => {
     if (!formId) return;
-    api.forms.get(formId).then(({ data }) => {
+    api.forms.get(formId).then((data) => {
       setForm(data);
       setFormData({
         name: data.name,
-        email_to: data.email_to || '',
-        email_subject: data.email_subject || '',
-        email_from_name: data.email_from_name || '',
-        redirect_url: data.redirect_url || '',
-        error_redirect_url: data.error_redirect_url || '',
-        allowed_origins: data.allowed_origins || '',
-        webhook_url: data.webhook_url || '',
-        webhook_secret: data.webhook_secret || '',
-        honeypot_enabled: !!data.honeypot_enabled,
-        recaptcha_enabled: !!data.recaptcha_enabled,
-        recaptcha_secret: data.recaptcha_secret || '',
-        is_active: !!data.is_active,
-        append_params: !!data.append_params,
+        redirectUrl: data.redirectUrl || '',
+        emailNotifications: !!data.emailNotifications,
       });
     }).finally(() => setLoading(false));
   }, [formId]);
@@ -59,23 +37,11 @@ export default function FormSettings() {
     setSuccess('');
     setSaving(true);
     try {
-      const { data } = await api.forms.update(formId, {
+      await api.forms.update(formId, {
         name: formData.name,
-        email_to: formData.email_to || null,
-        email_subject: formData.email_subject || null,
-        email_from_name: formData.email_from_name || null,
-        redirect_url: formData.redirect_url || null,
-        error_redirect_url: formData.error_redirect_url || null,
-        allowed_origins: formData.allowed_origins || null,
-        webhook_url: formData.webhook_url || null,
-        webhook_secret: formData.webhook_secret || null,
-        honeypot_enabled: formData.honeypot_enabled ? 1 : 0,
-        recaptcha_enabled: formData.recaptcha_enabled ? 1 : 0,
-        recaptcha_secret: formData.recaptcha_secret || null,
-        is_active: formData.is_active ? 1 : 0,
-        append_params: formData.append_params ? 1 : 0,
+        redirectUrl: formData.redirectUrl || null,
+        emailNotifications: formData.emailNotifications,
       });
-      setForm(data);
       setSuccess('Settings saved successfully');
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
@@ -107,6 +73,15 @@ export default function FormSettings() {
     );
   }
 
+  if (!form.canWrite) {
+    return (
+      <div className="max-w-2xl mx-auto text-center py-20">
+        <p className="text-gray-500">You don't have permission to edit this form's settings.</p>
+        <Link to={`/forms/${formId}`} className="text-primary-600 hover:text-primary-700 text-sm mt-2 inline-block">Back to form</Link>
+      </div>
+    );
+  }
+
   const inputClass = 'w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition';
 
   return (
@@ -128,90 +103,22 @@ export default function FormSettings() {
               <label className="block text-sm font-medium text-gray-700 mb-1.5">Form Name</label>
               <input type="text" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className={inputClass} required />
             </div>
-            <div className="flex items-center gap-3">
-              <input type="checkbox" id="is_active" checked={formData.is_active} onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })} className="h-4 w-4 text-primary-600 border-gray-300 rounded" />
-              <label htmlFor="is_active" className="text-sm font-medium text-gray-700">Form is active (accepting submissions)</label>
-            </div>
           </div>
         </section>
 
         <section className="bg-white rounded-xl border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Email Notifications</h2>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Send notifications to</label>
-              <input type="email" value={formData.email_to} onChange={(e) => setFormData({ ...formData, email_to: e.target.value })} className={inputClass} placeholder="notifications@example.com" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Email Subject</label>
-              <input type="text" value={formData.email_subject} onChange={(e) => setFormData({ ...formData, email_subject: e.target.value })} className={inputClass} placeholder="New form submission" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">From Name</label>
-              <input type="text" value={formData.email_from_name} onChange={(e) => setFormData({ ...formData, email_from_name: e.target.value })} className={inputClass} placeholder="ContactFormAPI" />
-            </div>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Notifications</h2>
+          <div className="flex items-center gap-3">
+            <input type="checkbox" id="emailNotifications" checked={formData.emailNotifications} onChange={(e) => setFormData({ ...formData, emailNotifications: e.target.checked })} className="h-4 w-4 text-primary-600 border-gray-300 rounded" />
+            <label htmlFor="emailNotifications" className="text-sm font-medium text-gray-700">Enable email notifications for new submissions</label>
           </div>
         </section>
 
         <section className="bg-white rounded-xl border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Redirects</h2>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Success Redirect URL</label>
-              <input type="url" value={formData.redirect_url} onChange={(e) => setFormData({ ...formData, redirect_url: e.target.value })} className={inputClass} placeholder="https://yoursite.com/thank-you" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Error Redirect URL</label>
-              <input type="url" value={formData.error_redirect_url} onChange={(e) => setFormData({ ...formData, error_redirect_url: e.target.value })} className={inputClass} placeholder="https://yoursite.com/error" />
-            </div>
-            <div className="flex items-center gap-3">
-              <input type="checkbox" id="append_params" checked={formData.append_params} onChange={(e) => setFormData({ ...formData, append_params: e.target.checked })} className="h-4 w-4 text-primary-600 border-gray-300 rounded" />
-              <label htmlFor="append_params" className="text-sm font-medium text-gray-700">Append form data as query parameters to redirect URL</label>
-            </div>
-          </div>
-        </section>
-
-        <section className="bg-white rounded-xl border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Spam Protection</h2>
-          <div className="space-y-4">
-            <div className="flex items-center gap-3">
-              <input type="checkbox" id="honeypot" checked={formData.honeypot_enabled} onChange={(e) => setFormData({ ...formData, honeypot_enabled: e.target.checked })} className="h-4 w-4 text-primary-600 border-gray-300 rounded" />
-              <label htmlFor="honeypot" className="text-sm font-medium text-gray-700">Enable honeypot field</label>
-            </div>
-            <div className="flex items-center gap-3">
-              <input type="checkbox" id="recaptcha" checked={formData.recaptcha_enabled} onChange={(e) => setFormData({ ...formData, recaptcha_enabled: e.target.checked })} className="h-4 w-4 text-primary-600 border-gray-300 rounded" />
-              <label htmlFor="recaptcha" className="text-sm font-medium text-gray-700">Enable reCAPTCHA v2</label>
-            </div>
-            {formData.recaptcha_enabled && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">reCAPTCHA Secret Key</label>
-                <input type="text" value={formData.recaptcha_secret} onChange={(e) => setFormData({ ...formData, recaptcha_secret: e.target.value })} className={inputClass} placeholder="6Le..." />
-              </div>
-            )}
-          </div>
-        </section>
-
-        <section className="bg-white rounded-xl border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Webhook</h2>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Webhook URL</label>
-              <input type="url" value={formData.webhook_url} onChange={(e) => setFormData({ ...formData, webhook_url: e.target.value })} className={inputClass} placeholder="https://yourapi.com/webhook" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Webhook Secret</label>
-              <input type="text" value={formData.webhook_secret} onChange={(e) => setFormData({ ...formData, webhook_secret: e.target.value })} className={inputClass} placeholder="whsec_..." />
-              <p className="text-xs text-gray-400 mt-1">Sent as X-Webhook-Secret header</p>
-            </div>
-          </div>
-        </section>
-
-        <section className="bg-white rounded-xl border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Security</h2>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Redirect</h2>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Allowed Origins</label>
-            <input type="text" value={formData.allowed_origins} onChange={(e) => setFormData({ ...formData, allowed_origins: e.target.value })} className={inputClass} placeholder="https://yoursite.com, https://other.com" />
-            <p className="text-xs text-gray-400 mt-1">Comma-separated. Leave empty to allow all origins.</p>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Success Redirect URL</label>
+            <input type="url" value={formData.redirectUrl} onChange={(e) => setFormData({ ...formData, redirectUrl: e.target.value })} className={inputClass} placeholder="https://yoursite.com/thank-you" />
           </div>
         </section>
 
